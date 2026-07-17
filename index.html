@@ -163,6 +163,36 @@ h2.section:first-child { margin-top: 4px; }
 .reflex-body { background: var(--surface); }
 .reflex-head .grow { flex: 1; }
 .reflex-body { padding: 4px 14px 14px; display: none; }
+
+/* ---- Note d'ajustement au poids, sous la dose ---- */
+.wnote {
+  display: flex; gap: 6px; align-items: flex-start;
+  margin: 6px 0 2px; padding: 7px 9px;
+  background: var(--surface-2); border-radius: 8px;
+  font-size: 12.5px; line-height: 1.45; color: var(--ink-2);
+}
+.wnote-ico { flex: 0 0 auto; opacity: .6; }
+
+/* ---- Volet ajustement au poids ---- */
+.obese {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); overflow: hidden; margin: 12px 0;
+}
+.obese-head {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: none; border: 0; padding: 12px 14px; min-height: var(--tap);
+  text-align: left; font-weight: 700; color: var(--ink); font-size: 15px;
+}
+.obese-head .grow { flex: 1; }
+.obese-chev { transition: transform .18s; color: var(--ink-3); }
+.obese.open .obese-chev { transform: rotate(180deg); }
+.obese-body {
+  display: none; padding: 0 14px 14px; font-size: 14px;
+  line-height: 1.5; color: var(--ink-2);
+}
+.obese.open .obese-body { display: block; }
+.obese-body .gr { color: var(--ink-3); font-size: 12.5px; white-space: nowrap; }
+.obese-body li { margin: 3px 0; }
 .reflex-body.open { display: block; }
 .reflex h3 {
   font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
@@ -644,6 +674,7 @@ function renderAct() {
   }
 
   // Notes de bas de page du tableau
+
   const fns = new Set();
   (e.regimens || []).forEach(r => (r.footnotes || []).forEach(f => fns.add(f)));
   if (fns.size && sp.footnotes) {
@@ -657,6 +688,7 @@ function renderAct() {
 
   h += `<p class="src">${esc(sp.tableTitle)} — ${esc(sp.part)}<br>${esc(S.data.source)}<br>${esc(S.data.version)}</p>`;
   $('v-act').innerHTML = h;
+
 
   const std = $('tStd'), all = $('tAll');
   if (std) std.addEventListener('click', () => { S.allergy = false; renderAct(); });
@@ -689,7 +721,6 @@ function renderAllergy(e, sp) {
             <strong>Alternative propre à cet acte</strong>
             <p style="margin:6px 0 0">${esc(sp.allergyHeader || '')}</p>
           </div>`;
-    h += obeseBlock();
     return h;
   }
 
@@ -704,6 +735,9 @@ function renderAllergy(e, sp) {
     h += `<div class="regimen allergy">
             <div class="kind">Si ${esc(r.drug)} &rarr; allergie aux bêta-lactamines</div>
             <div class="dose">${esc(rule.then)}</div>`;
+    // note de poids : sur la ou les molécules de REMPLACEMENT
+    for (const wn of altWeightNotes(rule.then))
+      h += `<div class="wnote"><span class="wnote-ico">&#9878;</span>${esc(wn)}</div>`;
     if (rule.note)  h += `<div class="field"><span class="field-ico">&#9888;</span>
                           <span class="field-val">${esc(rule.note)}</span></div>`;
     if (e.allergyNote) h += `<div class="field"><span class="field-ico">&#9888;</span>
@@ -728,19 +762,46 @@ function renderAllergy(e, sp) {
     h += `<li>Si ${esc(r.ifDrug)} : ${esc(r.then)}${r.note ? ' — ' + esc(r.note) : ''}</li>`;
   h += '</ul></div>';
 
-  h += obeseBlock();
   return h;
 }
 
-function obeseBlock() {
-  let h = '';
-  h += `<div class="info">
-          <strong>Patient obèse (R1.6)</strong>
-          <p style="margin:6px 0 0">Clindamycine : 900 mg pour IMC 30–45 ; 1200 mg pour IMC 46–60 ; 1600 mg pour IMC &gt; 60.
-             Gentamicine : 6 à 7 mg/kg de poids ajusté. Vancomycine : 20 mg/kg de poids total.
-             Teicoplanine non recommandée chez le patient obèse.</p>
-        </div>`;
-  return h;
+/* Ajustement au poids, propre à la molécule affichée.
+   Strictement le texte de la RFE : R1.5.1 (céphalosporines), R1.5.2 (amox-clav),
+   R1.6 (alternatives d'allergie). Aucune conduite n'est extrapolée. */
+const WEIGHT_NOTE = {
+  'céfazoline':   "Obèse : ne pas augmenter la dose unitaire, sauf cas particuliers (notamment IMC > 50) — R1.5.1 [◉◉◎ GRADE 2]",
+  'céfoxitine':   "Obèse : ne pas augmenter la dose unitaire, sauf cas particuliers (notamment IMC > 50) — R1.5.1 [◉◉◎ GRADE 2]",
+  'céfuroxime':   "Obèse : ne pas augmenter la dose unitaire, sauf cas particuliers (notamment IMC > 50) — R1.5.1 [◉◉◎ GRADE 2]",
+  'ceftazidime':  "Obèse : ne pas augmenter la dose unitaire, sauf cas particuliers (notamment IMC > 50) — R1.5.1 [◉◉◎ GRADE 2]",
+  'ceftriaxone':  "Obèse : ne pas augmenter la dose unitaire, sauf cas particuliers (notamment IMC > 50) — R1.5.1 [◉◉◎ GRADE 2]",
+  'amoxicilline/clavulanate': "Obèse : ne pas augmenter la dose unitaire, sauf cas particuliers (notamment IMC > 50) — R1.5.2 [◉◎◎ Avis d'experts]",
+  'amoxicilline': "Obèse : molécule hydrophile, pas de rationnel pour augmenter la dose au prorata du poids — R1.5 [◉◉◎ GRADE 2]",
+  'clindamycine': "Obèse : 900 mg si IMC 30–45 ; 1200 mg si IMC 46–60 ; 1600 mg si IMC > 60 — R1.6 [◉◎◎ Avis d'experts]",
+  'gentamicine':  "Obèse : 6 à 7 mg/kg de poids ajusté — R1.6 [◉◎◎ Avis d'experts]",
+  'vancomycine':  "Obèse : 20 mg/kg de poids total (comme chez le non-obèse) — R1.6 [◉◎◎ Avis d'experts]",
+  'teicoplanine': "Non recommandée chez le patient obèse (absence de donnée) — R1.6 [◉◎◎ Avis d'experts]"
+};
+function weightNote(drug) {
+  let d = norm(drug).replace(/^(au choix|la veille au soir|lors de la chirurgie)\s*:\s*/, '')
+                    .replace(/^\+\s*/, '').trim();
+  for (const k in WEIGHT_NOTE) if (d === norm(k)) return WEIGHT_NOTE[k];
+  // molécule composée : « Vancomycine ou Teicoplanine », « Pipéracilline + Tazobactam »…
+  for (const k in WEIGHT_NOTE) if (d.startsWith(norm(k) + ' ')) return WEIGHT_NOTE[k];
+  return null;
+}
+
+/* Molécules d'alternative citées dans un texte libre (« clindamycine 900 mg IVL ou
+   vancomycine 20 mg/kg… ») : on renvoie la note de poids de chacune, sans doublon. */
+function altWeightNotes(text) {
+  const t = norm(text), out = [], seen = new Set();
+  for (const k of ['clindamycine','gentamicine','vancomycine','teicoplanine',
+                   'céfazoline','céfoxitine','céfuroxime','amoxicilline/clavulanate']) {
+    if (t.includes(norm(k)) && !seen.has(k)) {
+      const n = WEIGHT_NOTE[k];
+      if (n && !out.includes(n)) { out.push(n); seen.add(k); }
+    }
+  }
+  return out;
 }
 
 function allergyIrrelevant() {
@@ -753,6 +814,8 @@ function regimenCard(cls, kindLabel, r, sp) {
              <div class="kind">${esc(kindLabel)}</div>
              <div class="drug">${esc(r.drug)}</div>
              <div class="dose">${esc(r.dose)}</div>`;
+  const wn = weightNote(r.drug);
+  if (wn) h += `<div class="wnote"><span class="wnote-ico">&#9878;</span>${esc(wn)}</div>`;
   if (r.reinjection)
     h += `<div class="field"><span class="field-ico">&#8635;</span>
             <span><span class="field-label">Réinjection</span>
